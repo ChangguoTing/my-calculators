@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Center Capital Cost Calculator V2</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* --- 全局設定 --- */
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background-color: #f0f0f0; display: flex; flex-direction: column; height: 100vh; color: #444; }
+        
+        /* 頂部導航列 */
+        header { background-color: #3dcd58; color: white; padding: 0 20px; height: 50px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .brand { font-weight: bold; font-size: 14px; }
+        .title { font-size: 18px; font-weight: 500; text-transform: uppercase; }
+        
+        /* 主佈局 */
+        .container { display: flex; flex: 1; overflow: hidden; }
+        
+        /* 左側欄 (Inputs) */
+        .sidebar { width: 420px; background: #e6e6e6; border-right: 1px solid #ccc; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .group-title { background: #888; color: white; padding: 6px 10px; font-size: 13px; font-weight: bold; border-radius: 3px; display: flex; justify-content: space-between; }
+        
+        /* 輸入控制項 */
+        .input-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+        .input-row label { flex: 1; color: #333; }
+        select { flex: 1.2; padding: 4px; border: 1px solid #aaa; border-radius: 3px; font-size: 11px; background: white; }
+        
+        /* 修復警告的滑桿樣式 */
+        .slider-wrapper { flex: 1.5; display: flex; align-items: center; gap: 8px; }
+        input[type="range"] {
+            flex: 1; height: 6px; background: #bbb; border-radius: 3px; outline: none;
+            -webkit-appearance: none; /* Chrome/Safari */
+            appearance: none;         /* 標準寫法 (消除警告) */
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 16px; height: 16px; background: #3dcd58; border-radius: 50%; border: 2px solid white; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .val-box { font-weight: bold; width: 70px; text-align: right; font-size: 12px; }
+
+        /* 冗餘矩陣 (Redundancy Grid) */
+        .grid-container { display: grid; grid-template-columns: 80px 1fr 1fr 1fr 80px; gap: 4px; background: #dcdcdc; padding: 8px; border-radius: 4px; font-size: 11px; text-align: center; }
+        .grid-head { font-weight: bold; color: #555; font-size: 10px; }
+        .grid-row-label { text-align: left; font-weight: bold; align-self: center; }
+        .tiny-select { width: 100%; padding: 2px; font-size: 10px; }
+
+        /* 修復警告的 Checkbox */
+        .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px; }
+        .check-item { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        input[type="checkbox"] {
+            -webkit-appearance: none; appearance: none; /* 消除警告 */
+            width: 16px; height: 16px; border: 1px solid #666; background: white; cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center;
+        }
+        input[type="checkbox"]:checked { background: #666; }
+        input[type="checkbox"]:checked::after { content: '✓'; color: white; font-size: 12px; font-weight: bold; }
+
+        /* 右側欄 (Results) */
+        .main { flex: 1; background: white; padding: 20px; overflow-y: auto; }
+        .res-header { color: #3dcd58; font-size: 18px; margin-bottom: 15px; font-weight: 500; }
+        
+        .section-bar { background: linear-gradient(to bottom, #bbb, #999); color: white; padding: 5px 10px; font-size: 13px; font-weight: bold; margin-bottom: 10px; border-radius: 3px; display: flex; justify-content: space-between; }
+        
+        /* 摘要表格 */
+        .summary-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+        .summary-table td { padding: 6px 0; border-bottom: 1px dashed #ddd; }
+        .res-val { text-align: right; font-weight: bold; color: #333; }
+
+        /* 圖表區 */
+        .chart-row { display: flex; align-items: center; height: 160px; margin-bottom: 10px; }
+        .chart-container { width: 140px; height: 140px; }
+        .legend { margin-left: 20px; font-size: 11px; display: flex; flex-direction: column; gap: 5px; }
+        .legend div { display: flex; align-items: center; gap: 8px; }
+        .dot { width: 10px; height: 10px; display: inline-block; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">Life Is On | Schneider Electric</div>
+        <div class="title">Data Center Capital Cost Calculator</div>
+        <div><i class="fas fa-question-circle"></i></div>
+    </header>
+
+    <div class="container">
+        <div class="sidebar">
+            <div style="color:#3dcd58; font-weight:bold;">Inputs</div>
+
+            <div class="group-title">Data Center Environment</div>
+            
+            <div class="input-row">
+                <label>Location</label>
+                <div style="flex:1.2; display:flex; gap:5px;">
+                    <select id="region" onchange="updateLocation()"><option>N. America</option><option>Asia</option></select>
+                    <select id="country" onchange="updateLocation()">
+                        <option value="US">United States</option>
+                        <option value="TW">Taiwan</option>
+                        <option value="JP">Japan</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="input-row">
+                <label>Design Capacity</label>
+                <select id="capacity" onchange="calc()">
+                    <option value="500">500 kW</option>
+                    <option value="1000" selected>1000 kW</option>
+                    <option value="2000">2000 kW</option>
+                    <option value="5000">5000 kW</option>
+                </select>
+            </div>
+
+            <div class="input-row">
+                <label>Cooling System</label>
+                <select id="cooling_type" onchange="calc()">
+                    <option value="1.2">CRAH with VFD chiller</option> <option value="1.0">Air-cooled Chiller</option> <option value="0.8">Direct Expansion (DX)</option> </select>
+            </div>
+
+            <div class="input-row">
+                <label>Power Density</label>
+                <div class="slider-wrapper">
+                    <input type="range" id="density" min="2" max="20" step="1" value="4" oninput="calc()">
+                    <div class="val-box" id="disp_density">4 kW/rack</div>
+                </div>
+            </div>
+
+            <div class="input-row">
+                <label>Labor Rate</label>
+                <div class="slider-wrapper">
+                    <input type="range" id="labor" min="20" max="200" step="10" value="90" oninput="calc()">
+                    <div class="val-box" id="disp_labor">$ 90 /hr</div>
+                </div>
+            </div>
+
+            <div class="input-row">
+                <label>Core & Shell</label>
+                <div class="slider-wrapper">
+                    <input type="range" id="shell" min="50" max="300" step="10" value="90" oninput="calc()">
+                    <div class="val-box" id="disp_shell">$ 90 /ft²</div>
+                </div>
+            </div>
+
+            <div class="group-title">Redundancy Level</div>
+            <div class="grid-container">
+                <div></div><div class="grid-head">IT Dist</div><div class="grid-head">UPS</div><div class="grid-head">Gen</div><div></div>
+                
+                <div class="grid-row-label">Power</div>
+                <select class="tiny-select"><option>N</option><option>N+1</option></select>
+                <select class="tiny-select" id="red_ups" onchange="calc()"><option value="1">N</option><option value="1.1">N+1</option><option value="1.8">2N</option></select>
+                <select class="tiny-select" id="red_gen" onchange="calc()"><option value="1">N</option><option value="1.1">N+1</option></select>
+                <div></div>
+
+                <div></div><div class="grid-head">CRAH</div><div class="grid-head">Pumps</div><div class="grid-head">Chiller</div><div class="grid-head">Heat</div>
+                
+                <div class="grid-row-label">Cooling</div>
+                <select class="tiny-select"><option>N</option></select>
+                <select class="tiny-select"><option>N</option></select>
+                <select class="tiny-select" id="red_chiller" onchange="calc()"><option value="1">N</option><option value="1.2">N+1</option><option value="1.8">2N</option></select>
+                <select class="tiny-select"><option>N</option></select>
+            </div>
+
+            <div class="group-title">Include in Cost</div>
+            <div class="check-grid">
+                <label class="check-item"><input type="checkbox" id="cb_racks" checked onchange="calc()"> Racks</label>
+                <label class="check-item"><input type="checkbox" checked> Fire suppression</label>
+                <label class="check-item"><input type="checkbox" id="cb_gen" checked onchange="calc()"> Generator</label>
+                <label class="check-item"><input type="checkbox" checked> Switchgear</label>
+                <label class="check-item"><input type="checkbox" checked> Raised floor</label>
+                <label class="check-item"><input type="checkbox" checked> Dropped ceiling</label>
+            </div>
+        </div>
+
+        <div class="main">
+            <div class="res-header">Results</div>
+
+            <div class="section-bar">
+                Capital Cost Summary
+                <select style="color:black; font-size:11px; height:20px;"><option>USD ($)</option></select>
+            </div>
+            <table class="summary-table">
+                <tr><td>Data Center Cost</td><td class="res-val" id="out_total">$ 7.2 M</td></tr>
+                <tr><td>Data Center Cost Per Watt</td><td class="res-val" id="out_per_watt">$ 7.19</td></tr>
+                <tr><td>Calculated Rack Quantity</td><td class="res-val" id="out_racks">250</td></tr>
+                <tr><td>IT Room Area</td><td class="res-val" id="out_it_area">8,125 ft²</td></tr>
+                <tr><td>Facility Area</td><td class="res-val" id="out_fac_area">13,195 ft²</td></tr>
+            </table>
+
+            <div class="section-bar">Cost by Type</div>
+            <div class="chart-row">
+                <div class="chart-container"><canvas id="chartType"></canvas></div>
+                <div class="legend">
+                    <div><span class="dot" style="background:#6bb938"></span> Material (25%)</div>
+                    <div><span class="dot" style="background:#fcd116"></span> Installation (40%)</div>
+                    <div><span class="dot" style="background:#00a3e0"></span> Design (10%)</div>
+                    <div><span class="dot" style="background:#999"></span> Project Mgt (15%)</div>
+                    <div><span class="dot" style="background:#e67e22"></span> Core & Shell (10%)</div>
+                </div>
+            </div>
+
+            <div class="section-bar">Cost by System</div>
+            <div class="chart-row">
+                <div class="chart-container"><canvas id="chartSys"></canvas></div>
+                <div class="legend">
+                    <div><span class="dot" style="background:#6bb938"></span> Power (<span id="pct_power">40</span>%)</div>
+                    <div><span class="dot" style="background:#fcd116"></span> Cooling (<span id="pct_cool">30</span>%)</div>
+                    <div><span class="dot" style="background:#00a3e0"></span> Other (<span id="pct_other">30</span>%)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 設定連動邏輯 ---
+        function updateLocation() {
+            const country = document.getElementById('country').value;
+            const laborSlider = document.getElementById('labor');
+            
+            // 模擬：台灣工資較低，美國較高
+            if(country === 'TW') {
+                laborSlider.value = 40; // 台灣工資模擬
+            } else if (country === 'US') {
+                laborSlider.value = 90; // 美國工資
+            } else if (country === 'JP') {
+                laborSlider.value = 80; // 日本工資
+            }
+            calc(); // 數值變了，重算
+        }
+
+        // --- 初始化圖表 ---
+        const configPie = {
+            type: 'doughnut',
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '55%' }
+        };
+        
+        const chartType = new Chart(document.getElementById('chartType'), {
+            ...configPie,
+            data: {
+                labels: ['Mat', 'Inst', 'Des', 'Mgt', 'Shell'],
+                datasets: [{ data: [25, 40, 10, 15, 10], backgroundColor: ['#6bb938', '#fcd116', '#00a3e0', '#999', '#e67e22'], borderWidth:0 }]
+            }
+        });
+
+        const chartSys = new Chart(document.getElementById('chartSys'), {
+            ...configPie,
+            data: {
+                labels: ['Power', 'Cooling', 'Other'],
+                datasets: [{ data: [40, 30, 30], backgroundColor: ['#6bb938', '#fcd116', '#00a3e0'], borderWidth:0 }]
+            }
+        });
+
+        // --- 核心大腦：計算邏輯 ---
+        function calc() {
+            // 1. 抓取所有變數
+            let cap = parseInt(document.getElementById('capacity').value);
+            let density = parseInt(document.getElementById('density').value);
+            let labor = parseInt(document.getElementById('labor').value);
+            let shellPrice = parseInt(document.getElementById('shell').value);
+            
+            // 抓取係數
+            let coolingFactor = parseFloat(document.getElementById('cooling_type').value);
+            let upsRedundancy = parseFloat(document.getElementById('red_ups').value);
+            let chillerRedundancy = parseFloat(document.getElementById('red_chiller').value);
+            
+            let hasGen = document.getElementById('cb_gen').checked;
+
+            // 更新文字顯示
+            document.getElementById('disp_density').innerText = density + " kW/rack";
+            document.getElementById('disp_labor').innerText = "$ " + labor + " /hr";
+            document.getElementById('disp_shell').innerText = "$ " + shellPrice + " /ft²";
+
+            // 2. 物理計算
+            let racks = Math.ceil(cap / density);
+            let itArea = racks * 30; // 假設每櫃 30 sqft
+            let facArea = Math.round(itArea * 1.7); 
+
+            // 3. 成本計算 (模擬公式)
+            // 電力系統成本 = 容量 * 基礎價 * UPS冗餘係數 * 發電機有無
+            let basePowerCost = cap * 2500; 
+            if (!hasGen) basePowerCost *= 0.6; // 沒發電機便宜很多
+            let powerCost = basePowerCost * upsRedundancy;
+
+            // 冷卻系統成本 = 容量 * 基礎價 * 冷氣種類係數 * 冗餘係數
+            let baseCoolingCost = cap * 1500;
+            let coolingCost = baseCoolingCost * coolingFactor * chillerRedundancy;
+
+            // 其他成本 (裝修、人工、管理)
+            let laborCost = (powerCost + coolingCost) * (labor / 100) * 0.4; // 工資影響安裝費
+            let shellCost = facArea * shellPrice;
+            let otherCost = laborCost + shellCost + (cap * 500); // 加上雜項
+
+            let totalCost = powerCost + coolingCost + otherCost;
+            let costPerWatt = totalCost / (cap * 1000);
+
+            // 4. 更新結果顯示
+            document.getElementById('out_total').innerText = "$ " + (totalCost / 1000000).toFixed(1) + " M";
+            document.getElementById('out_per_watt').innerText = "$ " + costPerWatt.toFixed(2);
+            document.getElementById('out_racks').innerText = racks.toLocaleString();
+            document.getElementById('out_it_area').innerText = itArea.toLocaleString() + " ft²";
+            document.getElementById('out_fac_area').innerText = facArea.toLocaleString() + " ft²";
+
+            // 5. 更新圖表比例
+            let pPct = Math.round((powerCost / totalCost) * 100);
+            let cPct = Math.round((coolingCost / totalCost) * 100);
+            let oPct = 100 - pPct - cPct;
+
+            // 更新 System Chart
+            chartSys.data.datasets[0].data = [pPct, cPct, oPct];
+            chartSys.update();
+            
+            // 更新文字
+            document.getElementById('pct_power').innerText = pPct;
+            document.getElementById('pct_cool').innerText = cPct;
+            document.getElementById('pct_other').innerText = oPct;
+
+            // 更新 Type Chart (簡單模擬連動：Core & Shell 佔比)
+            let shellPct = Math.round((shellCost / totalCost) * 100);
+            let remain = 100 - shellPct;
+            // 依比例分配剩餘項目
+            chartType.data.datasets[0].data = [
+                Math.round(remain * 0.25), // Mat
+                Math.round(remain * 0.40), // Inst
+                Math.round(remain * 0.15), // Des
+                Math.round(remain * 0.20), // Mgt
+                shellPct                   // Shell
+            ];
+            chartType.update();
+        }
+
+        // 啟動
+        calc();
+    </script>
+</body>
+</html>
